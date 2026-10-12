@@ -1,13 +1,369 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tides Performance</title>
+
+  <style>
+    :root {
+      --bg: #151515;
+      --panel: #202020;
+      --border: #383838;
+      --text: #eaeaea;
+      --muted: #999999;
+      --green: #b5e853;
+      --red: #ff7777;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    main {
+      max-width: 1050px;
+      margin: 0 auto;
+      padding: 36px 20px;
+    }
+
+    h1, h2, p { margin-top: 0; }
+
+    h1 {
+      color: var(--green);
+      font-size: 30px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle { color: var(--muted); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 28px 0;
+    }
+
+    .panel, .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .stat-value {
+      font-family: monospace;
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+
+    .calendar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    button, input {
+      background: #292929;
+      color: var(--text);
+      border: 1px solid #555;
+      padding: 9px 12px;
+      border-radius: 6px;
+    }
+
+    button { cursor: pointer; }
+    button:hover { border-color: var(--green); }
+
+    .weekdays, .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .weekdays {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    .day {
+      min-height: 88px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: #1b1b1b;
+      overflow-wrap: anywhere;
+    }
+
+    .day-number {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .day-pnl {
+      margin-top: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .empty { opacity: 0.3; }
+
+    .upload {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 600px) {
+      main { padding: 24px 12px; }
+      .stats { grid-template-columns: 1fr; }
+      .day { min-height: 65px; padding: 4px; }
+      .day-pnl { font-size: 10px; margin-top: 8px; }
+    }
+  </style>
 </head>
+
 <body>
-  <h1>Welcome to My Website</h1>
-  <p>This is a simple website hosted on GitHub Pages.</p>
-  <p><a href="./test1.html">Test1 page</a></p>
+<main>
+  <header>
+    <h1>TIDES PERFORMANCE</h1>
+    <p class="subtitle">Trading journal & performance tracker</p>
+  </header>
+
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-label">MONTHLY NET P&L</div>
+      <div id="total" class="stat-value">$0.00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">WINNING DAYS</div>
+      <div id="wins" class="stat-value">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">TRADING DAYS</div>
+      <div id="days" class="stat-value">0</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="calendar-head">
+      <button id="prev">← Prev</button>
+      <h2 id="month" style="margin:0">Calendar</h2>
+      <button id="next">Next →</button>
+    </div>
+
+    <div class="weekdays">
+      <div>Sun</div><div>Mon</div><div>Tue</div>
+      <div>Wed</div><div>Thu</div><div>Fri</div>
+      <div>Sat</div>
+    </div>
+
+    <div id="calendar" class="calendar"></div>
+
+    <p class="note">
+      Upload a CSV containing date and pnl columns.
+      Positive values are green; negative values are red.
+    </p>
+  </section>
+
+  <section class="panel" style="margin-top:20px">
+    <h2>Import trading data</h2>
+    <div class="upload">
+      <input id="csvFile" type="file" accept=".csv,text/csv">
+      <button id="clear">Clear data</button>
+    </div>
+    <p id="status" class="note">
+      No CSV loaded. Sample data is displayed.
+    </p>
+  </section>
+</main>
+
+<script>
+  const trades = new Map();
+
+  // Sample data. Replace it by uploading your CSV.
+  [
+    ["2026-10-01", 125],
+    ["2026-10-02", 75],
+    ["2026-10-05", 230],
+    ["2026-10-06", 100]
+  ].forEach(([date, pnl]) => trades.set(date, pnl));
+
+  let current = new Date();
+  current = new Date(current.getFullYear(),
+                     current.getMonth(), 1);
+
+  const money = n =>
+    (n < 0 ? "-$" : "$") +
+    Math.abs(n).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+  function render() {
+    const year = current.getFullYear();
+    const month = current.getMonth();
+
+    document.getElementById("month").textContent =
+      current.toLocaleDateString("en-US", {
+        month: "long", year: "numeric"
+      });
+
+    const calendar = document.getElementById("calendar");
+    calendar.replaceChildren();
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const count = new Date(year, month + 1, 0).getDate();
+    let total = 0, wins = 0, days = 0;
+
+    for (let i = 0; i < firstDay; i++) {
+      const cell = document.createElement("div");
+      cell.className = "day empty";
+      calendar.appendChild(cell);
+    }
+
+    for (let day = 1; day <= count; day++) {
+      const key = [
+        year,
+        String(month + 1).padStart(2, "0"),
+        String(day).padStart(2, "0")
+      ].join("-");
+
+      const cell = document.createElement("div");
+      cell.className = "day";
+
+      const number = document.createElement("div");
+      number.className = "day-number";
+      number.textContent = day;
+      cell.appendChild(number);
+
+      if (trades.has(key)) {
+        const pnl = trades.get(key);
+        total += pnl;
+        days++;
+        if (pnl > 0) wins++;
+
+        const value = document.createElement("div");
+        value.className = "day-pnl " +
+          (pnl > 0 ? "positive" :
+           pnl < 0 ? "negative" : "");
+        value.textContent = (pnl > 0 ? "+" : "") +
+          "$" + Math.abs(pnl).toLocaleString("en-US", {
+            maximumFractionDigits: 2
+          }) * (pnl < 0 ? -1 : 1);
+
+        // Format explicitly to avoid ambiguous signs.
+        value.textContent = (pnl > 0 ? "+" : pnl < 0 ? "-" : "") +
+          "$" + Math.abs(pnl).toLocaleString("en-US");
+        cell.appendChild(value);
+      }
+
+      calendar.appendChild(cell);
+    }
+
+    document.getElementById("total").textContent = money(total);
+    document.getElementById("total").className =
+      "stat-value " + (total > 0 ? "positive" :
+                       total < 0 ? "negative" : "");
+    document.getElementById("wins").textContent = wins;
+    document.getElementById("days").textContent = days;
+  }
+
+  document.getElementById("prev").onclick = () => {
+    current = new Date(current.getFullYear(),
+                       current.getMonth() - 1, 1);
+    render();
+  };
+
+  document.getElementById("next").onclick = () => {
+    current = new Date(current.getFullYear(),
+                       current.getMonth() + 1, 1);
+    render();
+  };
+
+  document.getElementById("csvFile").onchange = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const rows = text.trim().split(/\r?\n/);
+      const headers = rows.shift().split(",")
+        .map(h => h.trim().toLowerCase());
+
+      const dateIndex = headers.indexOf("date");
+      const pnlIndex = headers.indexOf("pnl");
+
+      if (dateIndex < 0 || pnlIndex < 0) {
+        throw new Error("CSV needs date and pnl columns.");
+      }
+
+      const nextTrades = new Map();
+
+      for (const row of rows) {
+        if (!row.trim()) continue;
+        const cols = row.split(",");
+        const date = cols[dateIndex]?.trim();
+        const pnl = Number(cols[pnlIndex]?.trim());
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            !Number.isFinite(pnl)) {
+          throw new Error("Invalid row: " + row);
+        }
+
+        // Multiple rows on one day are added together.
+        nextTrades.set(date, (nextTrades.get(date) || 0) + pnl);
+      }
+
+      trades.clear();
+      nextTrades.forEach((pnl, date) => trades.set(date, pnl));
+
+      document.getElementById("status").textContent =
+        "Loaded " + trades.size + " trading days from " + file.name;
+      render();
+    } catch (error) {
+      document.getElementById("status").textContent =
+        "Import failed: " + error.message;
+    }
+  };
+
+  document.getElementById("clear").onclick = () => {
+    trades.clear();
+    document.getElementById("status").textContent =
+      "Data cleared. Upload another CSV.";
+    render();
+  };
+
+  render();
+</script>
 </body>
 </html>
